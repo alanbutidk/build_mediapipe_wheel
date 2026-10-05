@@ -1,0 +1,64 @@
+name: Build Custom MediaPipe 3.13.5 for Arduino Uno Q
+
+on:
+  workflow_dispatch: # Allows manual execution from the GitHub Actions UI
+
+jobs:
+  build-wheel:
+    runs-on: ubuntu-24.04-arm # Native ARM64 runner ensures zero cross-compilation errors
+    
+    steps:
+      - name: Checkout MediaPipe
+        uses: actions/checkout@v4
+        with:
+          repository: 'google-ai-edge/mediapipe'
+          ref: 'master'
+
+      - name: Set up Python 3.13.5
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.5'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-common-dev libegl1-mesa-dev libgles2-mesa-dev python3.13-dev
+          pip install --upgrade pip setuptools wheel
+          pip install numpy protobuf target-python pybind11
+
+      - name: Setup Bazelisk
+        run: sudo npm install -g @bazel/bazelisk
+
+      - name: Patch MediaPipe for Python 3.13 Support
+        run: |
+          # MediaPipe needs to be forced to look for 3.13 paths inside the workspace
+          # Overwrite or create the lock dependency file for python 3.13 compatibility
+          echo "numpy" > requirements_lock_3_13.txt
+          echo "protobuf" >> requirements_lock_3_13.txt
+          
+          # Adjust setup.py to allow python 3.13 compilation tags
+          sed -i 's/python_requires=">=3.9,<3.13"/python_requires=">=3.9,<3.14"/' setup.py || true
+
+      - name: Execute Targeted Cortex-A53 Build
+        env:
+          # Strict binary optimization flags targeted directly at the QRB2210 SoC instruction limitations
+          BAZEL_LINKOPTS: "-Wl,--strip-all"
+          BAZEL_COPTS: "-march=armv8-a -mcpu=cortex-a53 -O2 -fPIC"
+        run: |
+          # Generate protocol buffers
+          python setup.py gen_protos
+          
+          # Force the C++ build chain to build using specific architectural constraints
+          python setup.py bdist_wheel \
+            --bopt="--copt=-march=armv8-a" \
+            --bopt="--copt=-mcpu=cortex-a53" \
+            --bopt="--copt=-O2" \
+            --bopt="--define=MEDIAPIPE_DISABLE_GPU=1" 
+          # Note: Disabling GPU via define prevents OpenGLES driver instruction fault mismatches on the headlessly run code
+
+      - name: Upload Python 3.13 Cortex-A53 Wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: mediapipe-python3.13-cortex_a53
+          path: dist/*.whl
+
