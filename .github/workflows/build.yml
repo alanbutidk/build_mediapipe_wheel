@@ -59,6 +59,12 @@ jobs:
           build --define=MEDIAPIPE_DISABLE_GPU=1
           build --linkopt=-Wl,--strip-all
           EOF
+      
+      - name: Set a valid pkg version
+        run: |
+          grep -n "__version__" setup.py
+          sed -i "s/^__version__ = .*/__version__ = '0.10.0.dev0'/" setup.py
+          grep -n "__version__" setup.py
 
       - name: Build wheel
         run: python setup.py bdist_wheel
