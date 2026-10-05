@@ -22,8 +22,9 @@ jobs:
 
       - name: Install System Dependencies
         run: |
+          sudo add-apt-repository ppa:deadsnakes/ppa -y
           sudo apt-get update
-          sudo apt-get install -y mesa-common-dev libegl1-mesa-dev libgles2-mesa-dev python3.13-dev
+          sudo apt-get install -y mesa-common-dev libegl1-mesa-dev libgles2-mesa-dev python3.13-dev python3.13-distutils
           pip install --upgrade pip setuptools wheel
           pip install numpy protobuf target-python pybind11
 
